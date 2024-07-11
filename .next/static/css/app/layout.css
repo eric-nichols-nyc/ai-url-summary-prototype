@@ -604,9 +604,6 @@ video {
   --tw-contain-paint:  ;
   --tw-contain-style:  ;
 }
-  .static {
-  position: static;
-}
   .flex {
   display: flex;
 }

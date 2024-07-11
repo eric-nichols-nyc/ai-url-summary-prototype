@@ -3,20 +3,22 @@
 "use server"
 import axios from 'axios';
 import OpenAI from "openai";
+import { streamText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { StreamableValue, createStreamableValue } from "ai/rsc"
 import {test} from '../../test'
 // Define your API keys
 const SERPER_API_KEY = process.env.NEXT_PUBLIC_SERPER_API_KEY;
 const TAVILY_API_KEY = process.env.NEXT_PUBLIC_TAVILY_API_KEY;
 const OPENAI_API_KEY = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
 
-const openai = new OpenAI({
+const new_openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
 
   async function summarizeContent(content: string) {
- 
     try {
-        const response = await openai.chat.completions.create({
+        const response = await new_openai.chat.completions.create({
             model: "gpt-4o",
             messages: [ {role: "system", content: "Summarize" + content+"in one or two paragraphs, as markdown. add a section highlighting the main points and a section with up to four key words. Don't include any external links"}, {role: "user", content: content} ],
             temperature: 1,
@@ -26,8 +28,25 @@ const openai = new OpenAI({
             presence_penalty: 0,
         });
 
+
           console.log('response = ', response.choices[0].message.content);
         return response.choices[0].message.content;
+
+    } catch (err) {
+        console.log('err = ', err)
+    }
+}
+
+async function streamAndSummarizeContent(content: string) {
+ 
+    try {
+        const result = await streamText({
+            model: openai("gpt-4o"),
+            temperature: 0.5,
+            messages: [ {role: "system", content: "Summarize" + content+"in one or two paragraphs, as markdown. add a section highlighting the main points and a section with up to four key words. Don't include any external links"}, {role: "user", content: content} ],
+
+          });
+          return createStreamableValue(result.textStream).value;
 
     } catch (err) {
         console.log('err = ', err)
@@ -84,7 +103,6 @@ async function getVideoContentTavily(videoUrl: string) {
     });
   
     const videoContent = response.data.content;
-    console.log('videoContent = ', videoContent)
     return videoContent;
   }
 
@@ -114,56 +132,27 @@ async function scrapeVideoContent(videoUrl: string) {
     }
 }
 
-
-// Function to summarize content using OpenAI
-// async function summarizeContent(content: string) {
-//     console.log('content = ', content)
-//     try {
-//         const response = await axios.post('https://api.openai.com/v1/engines/davinci-codex/completions', {
-//             prompt: `Summarize the following content: ${content} in one or two paragraphs`,
-//             max_tokens: 150
-//         }, {
-//             headers: {
-//                 'Authorization': `Bearer ${OPENAI_API_KEY}`
-//             }
-//         });
-
-//         const summary = response.data.choices[0].text;
-//         return summary;
-
-//     } catch (err) {
-//         console.log('err = ', err)
-//     }
-// }
-
 // Main function to search and summarize a video
 export async function searchAndSummarizeVideo(query: string) {
     try {
         //const videoUrl = await searchVideo(query);
         const videoContent = await getVideoContent(query);
-        console.log(videoContent)
         const summary = await summarizeContent(videoContent);
-        //return summary;
+        return summary;
     } catch (error) {
         console.error('Error:', error);
         throw new Error('Failed to search and summarize video');
     }
 }
 
-export async function scrapeAndSummarizeVideo(query: string) {
+export async function scrapeAndSummarizeVideo(query: string):Promise<StreamableValue<string, any> | undefined> {
     try {
-        const videoContent = JSON.stringify(test);
-        let summary = undefined;
-        if (videoContent) {
-            summary = await summarizeContent(videoContent);
-        }
+        const videoContent = await scrapeVideoContent(query);
+        if(!videoContent) {console.log('videoContent is empty'); return};
+        let summary = await streamAndSummarizeContent(videoContent);
         return summary;
-
-        // return summary;
     } catch (error) {
         console.error('Error:', error);
         throw new Error('Failed to scrape and summarize video');
     }
 }
-
-// Example usage
